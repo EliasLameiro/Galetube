@@ -34,7 +34,7 @@ public class User {
     private String password;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, columnDefinition = "varchar(20)") //Pongo columnDefinition para evitar que MySQL ponga el check y no permita nuevos roles
     private Role role;
 
     @CreationTimestamp
