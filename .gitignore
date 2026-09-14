@@ -8,3 +8,6 @@ Thumbs.db
 
 # Variables de entorno (contraseñas de la BD, secretos JWT...)
 .env
+
+# Archivos de módulo de IntelliJ
+*.iml
