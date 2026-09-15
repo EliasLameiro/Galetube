@@ -2,15 +2,14 @@ package io.github.eliaslameiro.galetube.user.web;
 
 import io.github.eliaslameiro.galetube.user.dto.RegisterRequest;
 import io.github.eliaslameiro.galetube.user.dto.UserResponse;
+import io.github.eliaslameiro.galetube.user.exception.UserAlreadyExistsException;
 import io.github.eliaslameiro.galetube.user.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -23,5 +22,10 @@ public class AuthController {
     public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest registerRequest) {
         UserResponse userResponse = authService.register(registerRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body(userResponse);
+    }
+
+    @ExceptionHandler(UserAlreadyExistsException.class)
+    public ProblemDetail handleUserAlreadyExistsException(UserAlreadyExistsException e){
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
     }
 }
