@@ -1,4 +1,20 @@
 package io.github.eliaslameiro.galetube.shared.security;
 
-public class JwtProperties {
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
+
+import java.time.Duration;
+
+@Validated
+@ConfigurationProperties(prefix = "galetube.jwt")
+public record JwtProperties (
+        @NotBlank
+        String secret,
+
+        @NotNull
+        Duration expiration
+){
+
 }

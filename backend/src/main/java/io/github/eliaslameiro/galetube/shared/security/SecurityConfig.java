@@ -1,6 +1,7 @@
 package io.github.eliaslameiro.galetube.shared.security;
 
 
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -15,6 +16,7 @@ import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 
 @Configuration
 @EnableWebSecurity
+@EnableConfigurationProperties({JwtProperties.class})
 public class SecurityConfig {
 
     @Bean
@@ -36,6 +38,11 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    }
+
+    @Bean
+    public JwtService jwtService(JwtProperties jwtProperties) {
+        return new JwtService(jwtProperties);
     }
 }
 
