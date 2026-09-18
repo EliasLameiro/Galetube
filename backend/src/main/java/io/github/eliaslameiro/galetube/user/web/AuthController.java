@@ -1,7 +1,10 @@
 package io.github.eliaslameiro.galetube.user.web;
 
+import io.github.eliaslameiro.galetube.user.dto.LoginRequest;
+import io.github.eliaslameiro.galetube.user.dto.LoginResponse;
 import io.github.eliaslameiro.galetube.user.dto.RegisterRequest;
 import io.github.eliaslameiro.galetube.user.dto.UserResponse;
+import io.github.eliaslameiro.galetube.user.exception.InvalidCredentialsException;
 import io.github.eliaslameiro.galetube.user.exception.UserAlreadyExistsException;
 import io.github.eliaslameiro.galetube.user.service.AuthService;
 import jakarta.validation.Valid;
@@ -24,8 +27,18 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(userResponse);
     }
 
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
+        return ResponseEntity.status(HttpStatus.OK).body(authService.login(loginRequest));
+    }
+
     @ExceptionHandler(UserAlreadyExistsException.class)
-    public ProblemDetail handleUserAlreadyExistsException(UserAlreadyExistsException e){
+    public ProblemDetail handleUserAlreadyExistsException(UserAlreadyExistsException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ProblemDetail handleInvalidCredentialsException(InvalidCredentialsException e){
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, e.getMessage());
     }
 }
