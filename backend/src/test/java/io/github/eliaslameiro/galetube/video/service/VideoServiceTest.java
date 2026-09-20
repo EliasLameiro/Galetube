@@ -198,4 +198,75 @@ class VideoServiceTest {
         verify(videoRepository, never()).save(any());
         verify(videoRepository).flush();
     }
+
+    @Test
+    void updateDeUnVideoPrivadoPorSuDuenoFunciona() {
+        Video video = videoCon(Visibility.PRIVATE);
+        dadoUnVideo(video);
+        dadoElAutor();
+
+        videoService.update(videoId, duenoId, new UpdateVideoRequest("Titulo nuevo", null, null));
+
+        assertThat(video.getTitle()).isEqualTo("Titulo nuevo");
+    }
+
+    @Test
+    void deletePorElDuenoBorraElVideo() {
+        Video video = videoCon(Visibility.PUBLIC);
+        dadoUnVideo(video);
+
+        videoService.delete(videoId, duenoId);
+
+        verify(videoRepository).delete(video);
+    }
+
+    @Test
+    void deleteDeUnVideoPrivadoPorSuDuenoFunciona() {
+        Video video = videoCon(Visibility.PRIVATE);
+        dadoUnVideo(video);
+
+        videoService.delete(videoId, duenoId);
+
+        verify(videoRepository).delete(video);
+    }
+
+    @Test
+    void deleteDeUnVideoPublicoAjenoLanzaAccessDenied() {
+        dadoUnVideo(videoCon(Visibility.PUBLIC));
+
+        assertThatThrownBy(() -> videoService.delete(videoId, extranoId))
+                .isInstanceOf(VideoAccessDeniedException.class);
+
+        verify(videoRepository, never()).delete(any(Video.class));
+    }
+
+    @Test
+    void deleteDeUnVideoNoListadoAjenoLanzaAccessDenied() {
+        dadoUnVideo(videoCon(Visibility.UNLISTED));
+
+        assertThatThrownBy(() -> videoService.delete(videoId, extranoId))
+                .isInstanceOf(VideoAccessDeniedException.class);
+
+        verify(videoRepository, never()).delete(any(Video.class));
+    }
+
+    @Test
+    void deleteDeUnVideoPrivadoAjenoLanzaNotFound() {
+        dadoUnVideo(videoCon(Visibility.PRIVATE));
+
+        assertThatThrownBy(() -> videoService.delete(videoId, extranoId))
+                .isInstanceOf(VideoNotFoundException.class);
+
+        verify(videoRepository, never()).delete(any(Video.class));
+    }
+
+    @Test
+    void deleteDeUnVideoInexistenteLanzaNotFound() {
+        given(videoRepository.findById(videoId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> videoService.delete(videoId, duenoId))
+                .isInstanceOf(VideoNotFoundException.class);
+
+        verify(videoRepository, never()).delete(any(Video.class));
+    }
 }

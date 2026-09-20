@@ -32,6 +32,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -195,5 +196,43 @@ class VideoControllerTest {
                 .andExpect(status().isUnauthorized());
 
         verifyNoInteractions(videoService);
+    }
+
+    @Test
+    void elDuenoBorraYRecibe204() throws Exception {
+        mockMvc.perform(delete("/api/videos/" + videoId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token()))
+                .andExpect(status().isNoContent());
+
+        verify(videoService).delete(videoId, userId);
+    }
+
+    @Test
+    void borrarSinTokenDevuelve401YNoLlegaAlServicio() throws Exception {
+        mockMvc.perform(delete("/api/videos/" + videoId))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(videoService);
+    }
+
+    @Test
+    void siElServicioNiegaElBorradoDevuelve403() throws Exception {
+        willThrow(new VideoAccessDeniedException("No puedes borrar un video que no es tuyo"))
+                .given(videoService).delete(any(), any());
+
+        mockMvc.perform(delete("/api/videos/" + videoId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail").value("No puedes borrar un video que no es tuyo"));
+    }
+
+    @Test
+    void borrarUnVideoQueNoExisteDevuelve404() throws Exception {
+        willThrow(new VideoNotFoundException("No existe el video"))
+                .given(videoService).delete(any(), any());
+
+        mockMvc.perform(delete("/api/videos/" + videoId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token()))
+                .andExpect(status().isNotFound());
     }
 }
