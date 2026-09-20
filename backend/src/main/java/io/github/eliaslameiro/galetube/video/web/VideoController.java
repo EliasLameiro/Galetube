@@ -63,6 +63,13 @@ public class VideoController {
         return videoService.update(id, userId, request);
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable UUID id, @AuthenticationPrincipal UUID userId) {
+        videoService.delete(id, userId);
+
+        return ResponseEntity.noContent().build();
+    }
+
     @ExceptionHandler(VideoAccessDeniedException.class)
     public ProblemDetail handleVideoAccessDeniedException(VideoAccessDeniedException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, e.getMessage());

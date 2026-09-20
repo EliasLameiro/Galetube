@@ -83,6 +83,17 @@ public class VideoService {
         return toResponse(video);
     }
 
+    @Transactional
+    public void delete(UUID videoId, UUID requesterId) {
+        Video video = findVisibleOrThrow(videoId, requesterId);
+
+        if (!video.getOwnerId().equals(requesterId)) {
+            throw new VideoAccessDeniedException("No puedes eliminar un vídeo que no es tuyo");
+        }
+
+        videoRepository.delete(video);
+    }
+
     @Transactional(readOnly = true)
     public Page<VideoResponse> listMine(UUID ownerId, Pageable pageable) {
         Page<Video> page = videoRepository.findByOwnerId(ownerId, pageable);
