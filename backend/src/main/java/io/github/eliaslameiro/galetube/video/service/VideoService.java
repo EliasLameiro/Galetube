@@ -5,7 +5,9 @@ import io.github.eliaslameiro.galetube.video.domain.Video;
 import io.github.eliaslameiro.galetube.video.domain.VideoRepository;
 import io.github.eliaslameiro.galetube.video.domain.Visibility;
 import io.github.eliaslameiro.galetube.video.dto.CreateVideoRequest;
+import io.github.eliaslameiro.galetube.video.dto.UpdateVideoRequest;
 import io.github.eliaslameiro.galetube.video.dto.VideoResponse;
+import io.github.eliaslameiro.galetube.video.exception.VideoAccessDeniedException;
 import io.github.eliaslameiro.galetube.video.exception.VideoNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -31,7 +33,7 @@ public class VideoService {
     public VideoResponse create(UUID ownerId, CreateVideoRequest request) {
         Video video = new Video(
                 ownerId,
-                request.title().trim(),
+                request.title(),
                 request.description(),
                 request.visibility());
 
@@ -56,11 +58,28 @@ public class VideoService {
     }
     @Transactional(readOnly = true)
     public VideoResponse getById(UUID videoId, UUID requesterId) {
-        Video video = videoRepository.findById(videoId).orElseThrow(() -> new VideoNotFoundException("no existe el video con id " + videoId));
+        return toResponse(findVisibleOrThrow(videoId, requesterId));
+    }
 
-        if(video.getVisibility() == Visibility.PRIVATE && !video.getOwnerId().equals(requesterId)) {
-            throw new VideoNotFoundException("No existe el vídeo con id " + videoId);
+    @Transactional
+    public VideoResponse update(UUID videoId, UUID requesterId, UpdateVideoRequest request) {
+        Video video = findVisibleOrThrow(videoId, requesterId);
+
+        if (!video.getOwnerId().equals(requesterId)) {
+            throw new VideoAccessDeniedException("No puedes editar un vídeo que no es tuyo");
         }
+
+        if (request.title() != null) {
+            video.rename(request.title());
+        }
+        if (request.description() != null) {
+            video.changeDescription(request.description());
+        }
+        if (request.visibility() != null) {
+            video.changeVisibility(request.visibility());
+        }
+
+        videoRepository.flush(); // Hace falta forzar antes de acabar la transacción para actualizar updatedAt
         return toResponse(video);
     }
 
@@ -71,6 +90,16 @@ public class VideoService {
         String username = userService.findUsernameById(ownerId).orElse(AUTOR_DESCONOCIDO);
 
         return page.map(video -> VideoResponse.from(video, username));
+    }
+
+    private Video findVisibleOrThrow(UUID videoId, UUID requesterId) {
+        Video video = videoRepository.findById(videoId)
+                .orElseThrow(() -> new VideoNotFoundException("No existe el vídeo con id " + videoId));
+
+        if (video.getVisibility() == Visibility.PRIVATE && !video.getOwnerId().equals(requesterId)) {
+            throw new VideoNotFoundException("No existe el vídeo con id " + videoId);
+        }
+        return video;
     }
 
     private VideoResponse toResponse(Video video) {

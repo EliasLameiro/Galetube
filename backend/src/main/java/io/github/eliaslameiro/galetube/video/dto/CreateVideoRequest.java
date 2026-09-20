@@ -11,7 +11,7 @@ public record CreateVideoRequest(
         @Size(max = 100)
         String title,
 
-        @Size(max = 500)
+        @Size(max = 5000)
         String description,
 
         @NotNull

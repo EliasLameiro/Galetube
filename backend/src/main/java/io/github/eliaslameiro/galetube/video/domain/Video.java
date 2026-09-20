@@ -44,14 +44,20 @@ public class Video {
 
     public Video(UUID ownerId, String title, String description, Visibility visibility) {
         this.ownerId = ownerId;
-        this.title = title;
+        this.title = title.trim();
         this.description = description;
         this.visibility = visibility;
     }
 
-    public void updateDetails(String title, String description, Visibility visibility) {
-        this.title = title;
-        this.description = description;
+    public void rename(String newTitle) {
+        this.title = newTitle.trim();
+    }
+
+    public void changeVisibility(Visibility visibility) {
         this.visibility = visibility;
+    }
+
+    public void changeDescription(String description) {
+        this.description = description;
     }
 }
