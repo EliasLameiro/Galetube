@@ -1,11 +1,14 @@
 package io.github.eliaslameiro.galetube.user.service;
 
 import io.github.eliaslameiro.galetube.shared.security.JwtService;
+import io.github.eliaslameiro.galetube.user.domain.Role;
 import io.github.eliaslameiro.galetube.user.domain.User;
 import io.github.eliaslameiro.galetube.user.domain.UserRepository;
 import io.github.eliaslameiro.galetube.user.dto.LoginRequest;
-import io.github.eliaslameiro.galetube.user.dto.LoginResponse;
+import io.github.eliaslameiro.galetube.user.dto.AuthResponse;
+import io.github.eliaslameiro.galetube.user.dto.RegisterRequest;
 import io.github.eliaslameiro.galetube.user.exception.InvalidCredentialsException;
+import io.github.eliaslameiro.galetube.user.exception.UserAlreadyExistsException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -56,9 +60,11 @@ class AuthServiceTest {
         given(jwtService.generateToken(usuario.getId().toString(), Map.of("role", "USER")))
                 .willReturn("token-firmado");
 
-        LoginResponse response = authService.login(new LoginRequest("elias@mail.com", PASSWORD));
+        AuthResponse response = authService.login(new LoginRequest("elias@mail.com", PASSWORD));
 
         assertThat(response.token()).isEqualTo("token-firmado");
+        assertThat(response.user().username()).isEqualTo("elias");
+        assertThat(response.user().email()).isEqualTo("elias@mail.com");
     }
 
     @Test
@@ -109,5 +115,50 @@ class AuthServiceTest {
         } catch (InvalidCredentialsException e) {
             return e.getMessage();
         }
+    }
+
+    @Test
+    void elRegistroDevuelveTokenYUsuarioParaNoTenerQueHacerLoginDespues() {
+        given(userRepository.existsByEmail("nuevo@mail.com")).willReturn(false);
+        given(userRepository.existsByUsername("nuevo")).willReturn(false);
+        given(userRepository.saveAndFlush(any(User.class))).willAnswer(invocacion -> {
+            User guardado = invocacion.getArgument(0);
+            guardado.setId(UUID.randomUUID());
+            return guardado;
+        });
+        given(jwtService.generateToken(anyString(), any())).willReturn("token-firmado");
+
+        AuthResponse response = authService.register(new RegisterRequest("nuevo", "nuevo@mail.com", PASSWORD));
+
+        assertThat(response.token()).isEqualTo("token-firmado");
+        assertThat(response.user().username()).isEqualTo("nuevo");
+        assertThat(response.user().role()).isEqualTo(Role.USER);
+    }
+
+    @Test
+    void elTokenDelRegistroLlevaElRolRealDelUsuarioYNoUnoFijo() {
+        given(userRepository.existsByEmail("jefe@mail.com")).willReturn(false);
+        given(userRepository.existsByUsername("jefe")).willReturn(false);
+        given(userRepository.saveAndFlush(any(User.class))).willAnswer(invocacion -> {
+            User guardado = invocacion.getArgument(0);
+            guardado.setId(UUID.randomUUID());
+            guardado.setRole(Role.ADMIN);
+            return guardado;
+        });
+        given(jwtService.generateToken(anyString(), any())).willReturn("token-firmado");
+
+        authService.register(new RegisterRequest("jefe", "jefe@mail.com", PASSWORD));
+
+        verify(jwtService).generateToken(anyString(), eq(Map.of("role", "ADMIN")));
+    }
+
+    @Test
+    void siElEmailYaExisteNoSeEmiteNingunToken() {
+        given(userRepository.existsByEmail("elias@mail.com")).willReturn(true);
+
+        assertThatThrownBy(() -> authService.register(new RegisterRequest("otro", "elias@mail.com", PASSWORD)))
+                .isInstanceOf(UserAlreadyExistsException.class);
+
+        verifyNoInteractions(jwtService);
     }
 }

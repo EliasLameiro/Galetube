@@ -4,7 +4,7 @@ import io.github.eliaslameiro.galetube.shared.security.JwtService;
 import io.github.eliaslameiro.galetube.user.domain.User;
 import io.github.eliaslameiro.galetube.user.domain.UserRepository;
 import io.github.eliaslameiro.galetube.user.dto.LoginRequest;
-import io.github.eliaslameiro.galetube.user.dto.LoginResponse;
+import io.github.eliaslameiro.galetube.user.dto.AuthResponse;
 import io.github.eliaslameiro.galetube.user.dto.RegisterRequest;
 import io.github.eliaslameiro.galetube.user.dto.UserResponse;
 import io.github.eliaslameiro.galetube.user.exception.InvalidCredentialsException;
@@ -33,7 +33,7 @@ public class AuthService {
     }
 
     @Transactional
-    public UserResponse register(RegisterRequest request) {
+    public AuthResponse register(RegisterRequest request) {
         String email = request.email().trim().toLowerCase(Locale.ROOT);
         String username = request.username().trim();
 
@@ -47,11 +47,11 @@ public class AuthService {
         User user = new User(username, email, passwordEncoder.encode(request.password()));
         User saved = userRepository.saveAndFlush(user);
 
-        return UserResponse.from(saved);
+        return new AuthResponse(generarToken(saved), UserResponse.from(saved));
     }
 
     @Transactional(readOnly = true)
-    public LoginResponse login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request) {
         String email = request.email().trim().toLowerCase(Locale.ROOT);
 
         User user = userRepository.findByEmail(email).orElse(null);
@@ -66,11 +66,13 @@ public class AuthService {
             throw new InvalidCredentialsException();
         }
 
-        String token = jwtService.generateToken(
+        return new AuthResponse(generarToken(user), UserResponse.from(user));
+    }
+
+    private String generarToken(User user) {
+        return jwtService.generateToken(
                 user.getId().toString(),
                 Map.of("role", user.getRole().name()));
-
-        return new LoginResponse(token);
     }
 }
 
