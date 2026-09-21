@@ -167,6 +167,28 @@ class VideoServiceTest {
     }
 
     @Test
+    void updateConDescripcionEnBlancoTambienLaBorra() {
+        Video video = videoCon(Visibility.PUBLIC);
+        dadoUnVideo(video);
+        dadoElAutor();
+
+        videoService.update(videoId, dueno, new UpdateVideoRequest(null, "   ", null));
+
+        assertThat(video.getDescription()).isNull();
+    }
+
+    @Test
+    void updateTrimeaLaDescripcion() {
+        Video video = videoCon(Visibility.PUBLIC);
+        dadoUnVideo(video);
+        dadoElAutor();
+
+        videoService.update(videoId, dueno, new UpdateVideoRequest(null, "  Con espacios  ", null));
+
+        assertThat(video.getDescription()).isEqualTo("Con espacios");
+    }
+
+    @Test
     void updateConDescripcionVaciaLaBorra() {
         Video video = videoCon(Visibility.PUBLIC);
         dadoUnVideo(video);
@@ -174,7 +196,7 @@ class VideoServiceTest {
 
         videoService.update(videoId, dueno, new UpdateVideoRequest(null, "", null));
 
-        assertThat(video.getDescription()).isEmpty();
+        assertThat(video.getDescription()).isNull();
     }
 
     @Test
@@ -378,4 +400,10 @@ class VideoServiceTest {
         assertThat(response.author().id()).isEqualTo(duenoId);
     }
 
+    @Test
+    void unVideoCreadoSinDescripcionLaGuardaComoNull() {
+        Video video = new Video(duenoId, "Titulo", "   ", Visibility.PUBLIC);
+
+        assertThat(video.getDescription()).isNull();
+    }
 }

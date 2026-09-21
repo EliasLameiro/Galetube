@@ -45,7 +45,7 @@ public class Video {
     public Video(UUID ownerId, String title, String description, Visibility visibility) {
         this.ownerId = ownerId;
         this.title = title.trim();
-        this.description = description;
+        changeDescription(description);
         this.visibility = visibility;
     }
 
@@ -57,7 +57,8 @@ public class Video {
         this.visibility = visibility;
     }
 
+    /** Sin descripcion se guarda siempre como null, venga como null, vacia o solo espacios. */
     public void changeDescription(String description) {
-        this.description = description;
+        this.description = (description == null || description.isBlank()) ? null : description.trim();
     }
 }
