@@ -1,5 +1,6 @@
 package io.github.eliaslameiro.galetube.user.domain;
 
+import io.github.eliaslameiro.galetube.shared.security.Role;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;

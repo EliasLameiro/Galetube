@@ -1,6 +1,6 @@
 package io.github.eliaslameiro.galetube.user.dto;
 
-import io.github.eliaslameiro.galetube.user.domain.Role;
+import io.github.eliaslameiro.galetube.shared.security.Role;
 import io.github.eliaslameiro.galetube.user.domain.User;
 
 import java.time.Instant;

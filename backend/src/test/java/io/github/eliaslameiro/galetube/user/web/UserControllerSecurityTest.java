@@ -3,7 +3,7 @@ package io.github.eliaslameiro.galetube.user.web;
 import io.github.eliaslameiro.galetube.shared.security.JwtProperties;
 import io.github.eliaslameiro.galetube.shared.security.JwtService;
 import io.github.eliaslameiro.galetube.shared.security.SecurityConfig;
-import io.github.eliaslameiro.galetube.user.domain.Role;
+import io.github.eliaslameiro.galetube.shared.security.Role;
 import io.github.eliaslameiro.galetube.user.dto.UserResponse;
 import io.github.eliaslameiro.galetube.user.service.UserService;
 import org.junit.jupiter.api.Test;

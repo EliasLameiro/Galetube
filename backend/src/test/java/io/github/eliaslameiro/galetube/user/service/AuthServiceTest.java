@@ -1,7 +1,7 @@
 package io.github.eliaslameiro.galetube.user.service;
 
 import io.github.eliaslameiro.galetube.shared.security.JwtService;
-import io.github.eliaslameiro.galetube.user.domain.Role;
+import io.github.eliaslameiro.galetube.shared.security.Role;
 import io.github.eliaslameiro.galetube.user.domain.User;
 import io.github.eliaslameiro.galetube.user.domain.UserRepository;
 import io.github.eliaslameiro.galetube.user.dto.LoginRequest;
