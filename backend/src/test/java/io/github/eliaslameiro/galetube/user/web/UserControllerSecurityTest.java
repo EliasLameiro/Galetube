@@ -119,4 +119,24 @@ class UserControllerSecurityTest {
 
         verifyNoInteractions(userService);
     }
+
+    @Test
+    void conUnTokenSinRolDevuelve401YNo500() throws Exception {
+        String tokenSinRol = jwtService.generateToken(userId.toString(), Map.of());
+
+        mockMvc.perform(get("/api/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenSinRol))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(userService);
+    }
+
+    @Test
+    void conUnRolQueYaNoExisteDevuelve401() throws Exception {
+        String tokenRolRaro = jwtService.generateToken(userId.toString(), Map.of("role", "SUPERADMIN"));
+
+        mockMvc.perform(get("/api/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenRolRaro))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(userService);
+    }
 }

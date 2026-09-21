@@ -10,11 +10,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -59,12 +61,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private UsernamePasswordAuthenticationToken buildAuthentication(Claims claims) {
         UUID userId = UUID.fromString(claims.getSubject());
-        String role = claims.get("role", String.class);
+        String claim = claims.get("role", String.class);
 
-        List<SimpleGrantedAuthority> authorities = (role == null)
-                ? List.of()
-                : List.of(new SimpleGrantedAuthority("ROLE_" + role));
+        if (claim == null) {
+            throw new IllegalArgumentException("El token no lleva rol");
+        }
 
-        return new UsernamePasswordAuthenticationToken(userId, null, authorities);
+        Role role = Role.valueOf(claim);
+
+        return new UsernamePasswordAuthenticationToken(
+                new Requester(userId, role), null, authorities(role));
+    }
+
+    private List<GrantedAuthority> authorities(Role role) {
+        List<GrantedAuthority> authorities = new ArrayList<>();
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + role.name()));
+        role.permissions().forEach(permission -> authorities.add(new SimpleGrantedAuthority(permission.name())));
+        return authorities;
     }
 }

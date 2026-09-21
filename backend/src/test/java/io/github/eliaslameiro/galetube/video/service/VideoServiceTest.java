@@ -1,5 +1,7 @@
 package io.github.eliaslameiro.galetube.video.service;
 
+import io.github.eliaslameiro.galetube.shared.security.Requester;
+import io.github.eliaslameiro.galetube.shared.security.Role;
 import io.github.eliaslameiro.galetube.user.service.UserService;
 import io.github.eliaslameiro.galetube.video.domain.Video;
 import io.github.eliaslameiro.galetube.video.domain.VideoRepository;
@@ -8,12 +10,17 @@ import io.github.eliaslameiro.galetube.video.dto.UpdateVideoRequest;
 import io.github.eliaslameiro.galetube.video.dto.VideoResponse;
 import io.github.eliaslameiro.galetube.video.exception.VideoAccessDeniedException;
 import io.github.eliaslameiro.galetube.video.exception.VideoNotFoundException;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -40,6 +47,10 @@ class VideoServiceTest {
     private final UUID extranoId = UUID.randomUUID();
     private final UUID videoId = UUID.randomUUID();
 
+    private final Requester dueno = new Requester(duenoId, Role.USER);
+    private final Requester extrano = new Requester(extranoId, Role.USER);
+    private final Requester admin = new Requester(UUID.randomUUID(), Role.ADMIN);
+
     @BeforeEach
     void setUp() {
         videoService = new VideoService(videoRepository, userService);
@@ -61,7 +72,7 @@ class VideoServiceTest {
     void getByIdDeUnVideoPrivadoAjenoLanzaNotFoundParaNoFiltrarQueExiste() {
         dadoUnVideo(videoCon(Visibility.PRIVATE));
 
-        assertThatThrownBy(() -> videoService.getById(videoId, extranoId))
+        assertThatThrownBy(() -> videoService.getById(videoId, extrano))
                 .isInstanceOf(VideoNotFoundException.class);
 
         verifyNoInteractions(userService);
@@ -72,7 +83,7 @@ class VideoServiceTest {
         dadoUnVideo(videoCon(Visibility.PRIVATE));
         dadoElAutor();
 
-        VideoResponse response = videoService.getById(videoId, duenoId);
+        VideoResponse response = videoService.getById(videoId, dueno);
 
         assertThat(response.title()).isEqualTo("Titulo original");
     }
@@ -82,7 +93,7 @@ class VideoServiceTest {
         dadoUnVideo(videoCon(Visibility.UNLISTED));
         dadoElAutor();
 
-        VideoResponse response = videoService.getById(videoId, extranoId);
+        VideoResponse response = videoService.getById(videoId, extrano);
 
         assertThat(response.visibility()).isEqualTo(Visibility.UNLISTED);
     }
@@ -102,7 +113,7 @@ class VideoServiceTest {
         Video video = videoCon(Visibility.PUBLIC);
         dadoUnVideo(video);
 
-        assertThatThrownBy(() -> videoService.update(videoId, extranoId, new UpdateVideoRequest("hackeado", null, null)))
+        assertThatThrownBy(() -> videoService.update(videoId, extrano, new UpdateVideoRequest("hackeado", null, null)))
                 .isInstanceOf(VideoAccessDeniedException.class);
 
         assertThat(video.getTitle()).isEqualTo("Titulo original");
@@ -114,7 +125,7 @@ class VideoServiceTest {
         Video video = videoCon(Visibility.PRIVATE);
         dadoUnVideo(video);
 
-        assertThatThrownBy(() -> videoService.update(videoId, extranoId, new UpdateVideoRequest("hackeado", null, null)))
+        assertThatThrownBy(() -> videoService.update(videoId, extrano, new UpdateVideoRequest("hackeado", null, null)))
                 .isInstanceOf(VideoNotFoundException.class);
 
         assertThat(video.getTitle()).isEqualTo("Titulo original");
@@ -125,7 +136,7 @@ class VideoServiceTest {
     void updateDeUnVideoInexistenteLanzaNotFound() {
         given(videoRepository.findById(videoId)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> videoService.update(videoId, duenoId, new UpdateVideoRequest("x", null, null)))
+        assertThatThrownBy(() -> videoService.update(videoId, dueno, new UpdateVideoRequest("x", null, null)))
                 .isInstanceOf(VideoNotFoundException.class);
     }
 
@@ -135,7 +146,7 @@ class VideoServiceTest {
         dadoUnVideo(video);
         dadoElAutor();
 
-        VideoResponse response = videoService.update(videoId, duenoId, new UpdateVideoRequest("Titulo nuevo", null, null));
+        VideoResponse response = videoService.update(videoId, dueno, new UpdateVideoRequest("Titulo nuevo", null, null));
 
         assertThat(response.title()).isEqualTo("Titulo nuevo");
         assertThat(video.getDescription()).isEqualTo("Descripcion original");
@@ -148,7 +159,7 @@ class VideoServiceTest {
         dadoUnVideo(video);
         dadoElAutor();
 
-        videoService.update(videoId, duenoId, new UpdateVideoRequest(null, null, null));
+        videoService.update(videoId, dueno, new UpdateVideoRequest(null, null, null));
 
         assertThat(video.getTitle()).isEqualTo("Titulo original");
         assertThat(video.getDescription()).isEqualTo("Descripcion original");
@@ -161,7 +172,7 @@ class VideoServiceTest {
         dadoUnVideo(video);
         dadoElAutor();
 
-        videoService.update(videoId, duenoId, new UpdateVideoRequest(null, "", null));
+        videoService.update(videoId, dueno, new UpdateVideoRequest(null, "", null));
 
         assertThat(video.getDescription()).isEmpty();
     }
@@ -172,7 +183,7 @@ class VideoServiceTest {
         dadoUnVideo(video);
         dadoElAutor();
 
-        videoService.update(videoId, duenoId, new UpdateVideoRequest("   Con espacios   ", null, null));
+        videoService.update(videoId, dueno, new UpdateVideoRequest("   Con espacios   ", null, null));
 
         assertThat(video.getTitle()).isEqualTo("Con espacios");
     }
@@ -183,7 +194,7 @@ class VideoServiceTest {
         dadoUnVideo(video);
         dadoElAutor();
 
-        videoService.update(videoId, duenoId, new UpdateVideoRequest(null, null, Visibility.PRIVATE));
+        videoService.update(videoId, dueno, new UpdateVideoRequest(null, null, Visibility.PRIVATE));
 
         assertThat(video.getVisibility()).isEqualTo(Visibility.PRIVATE);
     }
@@ -193,7 +204,7 @@ class VideoServiceTest {
         dadoUnVideo(videoCon(Visibility.PUBLIC));
         dadoElAutor();
 
-        videoService.update(videoId, duenoId, new UpdateVideoRequest("Titulo nuevo", null, null));
+        videoService.update(videoId, dueno, new UpdateVideoRequest("Titulo nuevo", null, null));
 
         verify(videoRepository, never()).save(any());
         verify(videoRepository).flush();
@@ -205,7 +216,7 @@ class VideoServiceTest {
         dadoUnVideo(video);
         dadoElAutor();
 
-        videoService.update(videoId, duenoId, new UpdateVideoRequest("Titulo nuevo", null, null));
+        videoService.update(videoId, dueno, new UpdateVideoRequest("Titulo nuevo", null, null));
 
         assertThat(video.getTitle()).isEqualTo("Titulo nuevo");
     }
@@ -215,7 +226,7 @@ class VideoServiceTest {
         Video video = videoCon(Visibility.PUBLIC);
         dadoUnVideo(video);
 
-        videoService.delete(videoId, duenoId);
+        videoService.delete(videoId, dueno);
 
         verify(videoRepository).delete(video);
     }
@@ -225,7 +236,7 @@ class VideoServiceTest {
         Video video = videoCon(Visibility.PRIVATE);
         dadoUnVideo(video);
 
-        videoService.delete(videoId, duenoId);
+        videoService.delete(videoId, dueno);
 
         verify(videoRepository).delete(video);
     }
@@ -234,7 +245,7 @@ class VideoServiceTest {
     void deleteDeUnVideoPublicoAjenoLanzaAccessDenied() {
         dadoUnVideo(videoCon(Visibility.PUBLIC));
 
-        assertThatThrownBy(() -> videoService.delete(videoId, extranoId))
+        assertThatThrownBy(() -> videoService.delete(videoId, extrano))
                 .isInstanceOf(VideoAccessDeniedException.class);
 
         verify(videoRepository, never()).delete(any(Video.class));
@@ -244,7 +255,7 @@ class VideoServiceTest {
     void deleteDeUnVideoNoListadoAjenoLanzaAccessDenied() {
         dadoUnVideo(videoCon(Visibility.UNLISTED));
 
-        assertThatThrownBy(() -> videoService.delete(videoId, extranoId))
+        assertThatThrownBy(() -> videoService.delete(videoId, extrano))
                 .isInstanceOf(VideoAccessDeniedException.class);
 
         verify(videoRepository, never()).delete(any(Video.class));
@@ -254,7 +265,7 @@ class VideoServiceTest {
     void deleteDeUnVideoPrivadoAjenoLanzaNotFound() {
         dadoUnVideo(videoCon(Visibility.PRIVATE));
 
-        assertThatThrownBy(() -> videoService.delete(videoId, extranoId))
+        assertThatThrownBy(() -> videoService.delete(videoId, extrano))
                 .isInstanceOf(VideoNotFoundException.class);
 
         verify(videoRepository, never()).delete(any(Video.class));
@@ -264,9 +275,95 @@ class VideoServiceTest {
     void deleteDeUnVideoInexistenteLanzaNotFound() {
         given(videoRepository.findById(videoId)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> videoService.delete(videoId, duenoId))
+        assertThatThrownBy(() -> videoService.delete(videoId, dueno))
                 .isInstanceOf(VideoNotFoundException.class);
 
         verify(videoRepository, never()).delete(any(Video.class));
+    }
+
+    @Test
+    void unAdminEditaElVideoAjeno() {
+        Video video = videoCon(Visibility.PUBLIC);
+        dadoUnVideo(video);
+        dadoElAutor();
+
+        videoService.update(videoId, admin, new UpdateVideoRequest("Moderado", null, null));
+
+        assertThat(video.getTitle()).isEqualTo("Moderado");
+    }
+
+    @Test
+    void unAdminBorraElVideoAjeno() {
+        Video video = videoCon(Visibility.PUBLIC);
+        dadoUnVideo(video);
+
+        videoService.delete(videoId, admin);
+
+        verify(videoRepository).delete(video);
+    }
+
+    @Test
+    void unAdminVeElVideoPrivadoAjeno() {
+        dadoUnVideo(videoCon(Visibility.PRIVATE));
+        dadoElAutor();
+
+        assertThat(videoService.getById(videoId, admin).title()).isEqualTo("Titulo original");
+    }
+
+    @Test
+    void unAdminBorraUnVideoPrivadoAjenoSinRecibir404() {
+        Video video = videoCon(Visibility.PRIVATE);
+        dadoUnVideo(video);
+
+        videoService.delete(videoId, admin);
+
+        verify(videoRepository).delete(video);
+    }
+
+    @Test
+    void elUsoDelPrivilegioQuedaRegistradoEnLaAuditoria() {
+        dadoUnVideo(videoCon(Visibility.PUBLIC));
+
+        List<ILoggingEvent> registradas = capturando(() -> videoService.delete(videoId, admin));
+
+        assertThat(registradas).hasSize(1);
+        assertThat(registradas.getFirst().getFormattedMessage())
+                .contains("accion=eliminar", "permiso=DELETE_ANY_VIDEO", "rol=ADMIN",
+                        "usuario=" + admin.id(), "propietario=" + duenoId);
+    }
+
+    @Test
+    void elDuenoNoGeneraLineaDeAuditoriaPorqueNoUsaNingunPrivilegio() {
+        dadoUnVideo(videoCon(Visibility.PUBLIC));
+
+        List<ILoggingEvent> registradas = capturando(() -> videoService.delete(videoId, dueno));
+
+        assertThat(registradas).isEmpty();
+    }
+
+    @Test
+    void unAdminSobreUnPrivadoAjenoRegistraLosDosPrivilegios() {
+        dadoUnVideo(videoCon(Visibility.PRIVATE));
+
+        List<ILoggingEvent> registradas = capturando(() -> videoService.delete(videoId, admin));
+
+        assertThat(registradas).hasSize(2);
+        assertThat(registradas.get(0).getFormattedMessage()).contains("accion=ver", "permiso=VIEW_ANY_VIDEO");
+        assertThat(registradas.get(1).getFormattedMessage()).contains("accion=eliminar", "permiso=DELETE_ANY_VIDEO");
+    }
+
+    /** Engancha un appender al logger AUDITORIA, ejecuta la accion y devuelve lo que se registro. */
+    private List<ILoggingEvent> capturando(Runnable accion) {
+        Logger auditoria = (Logger) LoggerFactory.getLogger("AUDITORIA");
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        auditoria.addAppender(appender);
+        try {
+            accion.run();
+            return List.copyOf(appender.list);
+        } finally {
+            auditoria.detachAppender(appender);
+            appender.stop();
+        }
     }
 }

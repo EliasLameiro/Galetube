@@ -1,6 +1,8 @@
 package io.github.eliaslameiro.galetube.video.web;
 
 import io.github.eliaslameiro.galetube.shared.security.JwtService;
+import io.github.eliaslameiro.galetube.shared.security.Requester;
+import io.github.eliaslameiro.galetube.shared.security.Role;
 import io.github.eliaslameiro.galetube.shared.security.SecurityConfig;
 import io.github.eliaslameiro.galetube.video.domain.Visibility;
 import io.github.eliaslameiro.galetube.video.dto.AuthorResponse;
@@ -58,6 +60,10 @@ class VideoControllerTest {
     private final UUID userId = UUID.randomUUID();
     private final UUID videoId = UUID.randomUUID();
 
+    private Requester requester() {
+        return new Requester(userId, Role.USER);
+    }
+
     private String token() {
         return jwtService.generateToken(userId.toString(), Map.of("role", "USER"));
     }
@@ -78,7 +84,7 @@ class VideoControllerTest {
 
     @Test
     void elDuenoEditaYRecibe200() throws Exception {
-        given(videoService.update(eq(videoId), eq(userId), any())).willReturn(respuesta("Titulo editado"));
+        given(videoService.update(eq(videoId), eq(requester()), any())).willReturn(respuesta("Titulo editado"));
 
         mockMvc.perform(patchAutenticado("{\"title\":\"Titulo editado\"}"))
                 .andExpect(status().isOk())
@@ -93,7 +99,7 @@ class VideoControllerTest {
         mockMvc.perform(patchAutenticado("{\"ownerId\":\"" + UUID.randomUUID() + "\",\"title\":\"Titulo editado\"}"))
                 .andExpect(status().isOk());
 
-        verify(videoService).update(eq(videoId), eq(userId), any());
+        verify(videoService).update(eq(videoId), eq(requester()), any());
     }
 
     @Test
@@ -204,7 +210,7 @@ class VideoControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token()))
                 .andExpect(status().isNoContent());
 
-        verify(videoService).delete(videoId, userId);
+        verify(videoService).delete(videoId, requester());
     }
 
     @Test
