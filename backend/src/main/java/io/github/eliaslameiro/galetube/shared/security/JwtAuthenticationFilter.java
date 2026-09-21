@@ -70,10 +70,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         Role role = Role.valueOf(claim);
 
         return new UsernamePasswordAuthenticationToken(
-                new Requester(userId, role), null, authorities(role));
+                new Requester(userId, role), null, getAuthorities(role));
     }
 
-    private List<GrantedAuthority> authorities(Role role) {
+    private List<GrantedAuthority> getAuthorities(Role role) {
         List<GrantedAuthority> authorities = new ArrayList<>();
         authorities.add(new SimpleGrantedAuthority("ROLE_" + role.name()));
         role.permissions().forEach(permission -> authorities.add(new SimpleGrantedAuthority(permission.name())));

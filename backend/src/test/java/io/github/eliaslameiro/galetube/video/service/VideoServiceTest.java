@@ -366,4 +366,16 @@ class VideoServiceTest {
             appender.stop();
         }
     }
+
+    @Test
+    void siElAutorYaNoExisteElVideoSigueVisibleComoUsuarioEliminado() {
+        dadoUnVideo(videoCon(Visibility.PUBLIC));
+        given(userService.findUsernameById(duenoId)).willReturn(Optional.empty());
+
+        VideoResponse response = videoService.getById(videoId, dueno);
+
+        assertThat(response.author().username()).isEqualTo("[usuario eliminado]");
+        assertThat(response.author().id()).isEqualTo(duenoId);
+    }
+
 }

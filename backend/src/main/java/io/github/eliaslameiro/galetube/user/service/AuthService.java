@@ -9,14 +9,12 @@ import io.github.eliaslameiro.galetube.user.dto.RegisterRequest;
 import io.github.eliaslameiro.galetube.user.dto.UserResponse;
 import io.github.eliaslameiro.galetube.user.exception.InvalidCredentialsException;
 import io.github.eliaslameiro.galetube.user.exception.UserAlreadyExistsException;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
 
 @Service
 public class AuthService {

@@ -35,9 +35,4 @@ public class UserService {
         return userRepository.findById(id).map(User::getUsername);
     }
 
-    @Transactional(readOnly = true)
-    public String getUsernameById(UUID id) {
-        return findUsernameById(id)
-                .orElseThrow(() -> new UserNotFoundException("No existe el usuario con id " + id));
-    }
-}
+ }
