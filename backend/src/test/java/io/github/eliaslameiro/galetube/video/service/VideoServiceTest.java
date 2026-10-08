@@ -374,7 +374,6 @@ class VideoServiceTest {
         assertThat(registradas.get(1).getFormattedMessage()).contains("accion=eliminar", "permiso=DELETE_ANY_VIDEO");
     }
 
-    /** Engancha un appender al logger AUDITORIA, ejecuta la accion y devuelve lo que se registro. */
     private List<ILoggingEvent> capturando(Runnable accion) {
         Logger auditoria = (Logger) LoggerFactory.getLogger("AUDITORIA");
         ListAppender<ILoggingEvent> appender = new ListAppender<>();

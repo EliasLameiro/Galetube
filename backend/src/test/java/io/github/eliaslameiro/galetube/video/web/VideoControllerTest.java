@@ -80,7 +80,6 @@ class VideoControllerTest {
                 .content(body);
     }
 
-    // --- Camino feliz ---
 
     @Test
     void elDuenoEditaYRecibe200() throws Exception {
@@ -125,7 +124,6 @@ class VideoControllerTest {
                 .andExpect(status().isOk());
     }
 
-    // --- Seguridad ---
 
     @Test
     void sinTokenDevuelve401YNoLlegaAlServicio() throws Exception {
@@ -156,7 +154,6 @@ class VideoControllerTest {
                 .andExpect(status().isNotFound());
     }
 
-    // --- Validacion ---
 
     @Test
     void elTituloEnBlancoDevuelve400ConElCampoSenalado() throws Exception {
@@ -186,7 +183,6 @@ class VideoControllerTest {
         verifyNoInteractions(videoService);
     }
 
-    // --- Reglas de acceso del resto de endpoints del modulo ---
 
     @Test
     void elDetalleDeUnVideoEsPublico() throws Exception {
