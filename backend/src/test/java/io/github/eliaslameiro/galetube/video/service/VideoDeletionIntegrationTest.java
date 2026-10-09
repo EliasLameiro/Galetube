@@ -1,4 +1,4 @@
-package io.github.eliaslameiro.galetube.video.event;
+package io.github.eliaslameiro.galetube.video.service;
 
 import io.github.eliaslameiro.galetube.shared.security.Requester;
 import io.github.eliaslameiro.galetube.shared.security.Role;
@@ -7,7 +7,6 @@ import io.github.eliaslameiro.galetube.shared.storage.StorageService;
 import io.github.eliaslameiro.galetube.video.domain.Video;
 import io.github.eliaslameiro.galetube.video.domain.VideoRepository;
 import io.github.eliaslameiro.galetube.video.domain.Visibility;
-import io.github.eliaslameiro.galetube.video.service.VideoService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -5,6 +5,7 @@ import io.github.eliaslameiro.galetube.shared.security.Role;
 import io.github.eliaslameiro.galetube.shared.storage.PresignedUpload;
 import io.github.eliaslameiro.galetube.shared.storage.StorageService;
 import io.github.eliaslameiro.galetube.shared.storage.StoredObject;
+import io.github.eliaslameiro.galetube.shared.storage.StoredFileDiscardedEvent;
 import io.github.eliaslameiro.galetube.user.service.UserService;
 import io.github.eliaslameiro.galetube.video.config.VideoProperties;
 import io.github.eliaslameiro.galetube.video.domain.Video;
@@ -17,7 +18,6 @@ import io.github.eliaslameiro.galetube.video.dto.UpdateVideoRequest;
 import io.github.eliaslameiro.galetube.video.dto.UploadRequest;
 import io.github.eliaslameiro.galetube.video.dto.UploadResponse;
 import io.github.eliaslameiro.galetube.video.dto.VideoResponse;
-import io.github.eliaslameiro.galetube.video.event.VideoDeletedEvent;
 import io.github.eliaslameiro.galetube.video.exception.InvalidUploadException;
 import io.github.eliaslameiro.galetube.video.exception.VideoAccessDeniedException;
 import io.github.eliaslameiro.galetube.video.exception.VideoFileNotUploadedException;
@@ -624,7 +624,7 @@ class VideoServiceTest {
 
         videoService.delete(videoId, dueno);
 
-        verify(events).publishEvent(new VideoDeletedEvent(videoId, "videos/" + videoId + "/original"));
+        verify(events).publishEvent(new StoredFileDiscardedEvent("videos/" + videoId + "/original"));
     }
 
     @Test
