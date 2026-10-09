@@ -11,6 +11,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 @Entity
@@ -38,6 +39,9 @@ public class User {
     @Column(nullable = false, columnDefinition = "varchar(20)") //Pongo columnDefinition para evitar que MySQL ponga el check y no permita nuevos roles
     private Role role;
 
+    @Setter(AccessLevel.NONE)
+    private String avatarKey;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -52,4 +56,14 @@ public class User {
         this.password = password;
         this.role = Role.USER;
     }
+
+    public Optional<String> replaceAvatar(String newKey) {
+        String previous = this.avatarKey;
+        this.avatarKey = newKey;
+        return Optional.ofNullable(previous);
+    }
+
+    public Optional<String> removeAvatar() {
+        return replaceAvatar(null);
+    } 
 }
