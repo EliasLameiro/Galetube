@@ -35,6 +35,7 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/videos/mine").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/videos", "/api/videos/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/users/*/avatar").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class);
