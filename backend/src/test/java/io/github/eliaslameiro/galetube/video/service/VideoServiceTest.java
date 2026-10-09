@@ -17,6 +17,7 @@ import io.github.eliaslameiro.galetube.video.dto.UpdateVideoRequest;
 import io.github.eliaslameiro.galetube.video.dto.UploadRequest;
 import io.github.eliaslameiro.galetube.video.dto.UploadResponse;
 import io.github.eliaslameiro.galetube.video.dto.VideoResponse;
+import io.github.eliaslameiro.galetube.video.event.VideoDeletedEvent;
 import io.github.eliaslameiro.galetube.video.exception.InvalidUploadException;
 import io.github.eliaslameiro.galetube.video.exception.VideoAccessDeniedException;
 import io.github.eliaslameiro.galetube.video.exception.VideoFileNotUploadedException;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -66,6 +68,9 @@ class VideoServiceTest {
     @Mock
     private StorageService storageService;
 
+    @Mock
+    private ApplicationEventPublisher events;
+
     private final VideoProperties videoProperties =
             new VideoProperties(Set.of("video/mp4", "video/webm"), DataSize.ofMegabytes(100));
 
@@ -81,7 +86,7 @@ class VideoServiceTest {
 
     @BeforeEach
     void setUp() {
-        videoService = new VideoService(videoRepository, userService, storageService, videoProperties);
+        videoService = new VideoService(videoRepository, userService, storageService, videoProperties, events);
     }
 
     private Video videoSubiendo(Visibility visibility) {
@@ -611,5 +616,33 @@ class VideoServiceTest {
 
         assertThat(response.getContent()).singleElement()
                 .satisfies(video -> assertThat(video.status()).isEqualTo(VideoStatus.READY));
+    }
+
+    @Test
+    void deleteAvisaDeQueHayQueBorrarSuFichero() {
+        dadoUnVideo(videoCon(Visibility.PUBLIC));
+
+        videoService.delete(videoId, dueno);
+
+        verify(events).publishEvent(new VideoDeletedEvent(videoId, "videos/" + videoId + "/original"));
+    }
+
+    @Test
+    void deleteDeUnVideoSinFicheroNoAvisaDeNada() {
+        dadoUnVideo(videoSubiendo(Visibility.PUBLIC));
+
+        videoService.delete(videoId, dueno);
+
+        verifyNoInteractions(events);
+    }
+
+    @Test
+    void deleteDenegadoNoAvisaDeNada() {
+        dadoUnVideo(videoCon(Visibility.PUBLIC));
+
+        assertThatThrownBy(() -> videoService.delete(videoId, extrano))
+                .isInstanceOf(VideoAccessDeniedException.class);
+
+        verifyNoInteractions(events);
     }
 }

@@ -17,6 +17,7 @@ import io.github.eliaslameiro.galetube.video.dto.UpdateVideoRequest;
 import io.github.eliaslameiro.galetube.video.dto.UploadRequest;
 import io.github.eliaslameiro.galetube.video.dto.UploadResponse;
 import io.github.eliaslameiro.galetube.video.dto.VideoResponse;
+import io.github.eliaslameiro.galetube.video.event.VideoDeletedEvent;
 import io.github.eliaslameiro.galetube.video.exception.InvalidUploadException;
 import io.github.eliaslameiro.galetube.video.exception.VideoAccessDeniedException;
 import io.github.eliaslameiro.galetube.video.exception.VideoFileNotUploadedException;
@@ -24,6 +25,7 @@ import io.github.eliaslameiro.galetube.video.exception.VideoNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -43,6 +45,7 @@ public class VideoService {
     private final UserService userService;
     private final StorageService storageService;
     private final VideoProperties videoProperties;
+    private final ApplicationEventPublisher events;
     private static final Logger auditoria = LoggerFactory.getLogger("AUDITORIA");
 
     private static final String AUTOR_DESCONOCIDO = "[usuario eliminado]";
@@ -137,6 +140,10 @@ public class VideoService {
         exigirPermiso(video, requester, Permission.DELETE_ANY_VIDEO, "eliminar");
 
         videoRepository.delete(video);
+
+        if (video.getStorageKey() != null) {
+            events.publishEvent(new VideoDeletedEvent(video.getId(), video.getStorageKey()));
+        }
     }
 
     @Transactional(readOnly = true)
