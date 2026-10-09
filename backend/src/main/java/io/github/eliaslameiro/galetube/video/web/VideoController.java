@@ -1,12 +1,17 @@
 package io.github.eliaslameiro.galetube.video.web;
 
-import io.github.eliaslameiro.galetube.video.dto.CreateVideoRequest;
-import io.github.eliaslameiro.galetube.video.dto.CreateVideoResponse;
 import io.github.eliaslameiro.galetube.shared.dto.PageResponse;
 import io.github.eliaslameiro.galetube.shared.security.Requester;
+import io.github.eliaslameiro.galetube.video.dto.CreateVideoRequest;
+import io.github.eliaslameiro.galetube.video.dto.CreateVideoResponse;
 import io.github.eliaslameiro.galetube.video.dto.UpdateVideoRequest;
+import io.github.eliaslameiro.galetube.video.dto.UploadRequest;
+import io.github.eliaslameiro.galetube.video.dto.UploadResponse;
 import io.github.eliaslameiro.galetube.video.dto.VideoResponse;
+import io.github.eliaslameiro.galetube.video.exception.InvalidUploadException;
 import io.github.eliaslameiro.galetube.video.exception.VideoAccessDeniedException;
+import io.github.eliaslameiro.galetube.video.exception.VideoFileNotUploadedException;
+import io.github.eliaslameiro.galetube.video.exception.VideoNotUploadingException;
 import io.github.eliaslameiro.galetube.video.service.VideoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -72,8 +77,29 @@ public class VideoController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/{id}/upload-url")
+    public UploadResponse renewUploadUrl(@PathVariable UUID id, @Valid @RequestBody UploadRequest request,
+                                         @AuthenticationPrincipal Requester requester) {
+        return videoService.renewUploadUrl(id, requester, request);
+    }
+
+    @PostMapping("/{id}/upload-complete")
+    public VideoResponse completeUpload(@PathVariable UUID id, @AuthenticationPrincipal Requester requester) {
+        return videoService.completeUpload(id, requester);
+    }
+
     @ExceptionHandler(VideoAccessDeniedException.class)
     public ProblemDetail handleVideoAccessDeniedException(VideoAccessDeniedException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, e.getMessage());
+    }
+
+    @ExceptionHandler(InvalidUploadException.class)
+    public ProblemDetail handleInvalidUploadException(InvalidUploadException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
+    @ExceptionHandler({VideoNotUploadingException.class, VideoFileNotUploadedException.class})
+    public ProblemDetail handleUploadStateConflict(RuntimeException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
     }
 }

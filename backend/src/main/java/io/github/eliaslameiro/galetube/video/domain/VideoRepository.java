@@ -10,5 +10,5 @@ public interface VideoRepository extends JpaRepository<Video, UUID> {
 
     Page<Video> findByOwnerId(UUID ownerId, Pageable pageable);
 
-    Page<Video> findByVisibility(Visibility visibility, Pageable pageable);
+    Page<Video> findByVisibilityAndStatus(Visibility visibility, VideoStatus status, Pageable pageable);
 }

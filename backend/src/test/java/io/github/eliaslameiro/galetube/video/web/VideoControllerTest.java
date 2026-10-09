@@ -7,10 +7,15 @@ import io.github.eliaslameiro.galetube.shared.security.SecurityConfig;
 import io.github.eliaslameiro.galetube.video.domain.VideoStatus;
 import io.github.eliaslameiro.galetube.video.domain.Visibility;
 import io.github.eliaslameiro.galetube.video.dto.AuthorResponse;
+import io.github.eliaslameiro.galetube.video.dto.CreateVideoResponse;
 import io.github.eliaslameiro.galetube.video.dto.UpdateVideoRequest;
+import io.github.eliaslameiro.galetube.video.dto.UploadResponse;
 import io.github.eliaslameiro.galetube.video.dto.VideoResponse;
+import io.github.eliaslameiro.galetube.video.exception.InvalidUploadException;
 import io.github.eliaslameiro.galetube.video.exception.VideoAccessDeniedException;
+import io.github.eliaslameiro.galetube.video.exception.VideoFileNotUploadedException;
 import io.github.eliaslameiro.galetube.video.exception.VideoNotFoundException;
+import io.github.eliaslameiro.galetube.video.exception.VideoNotUploadingException;
 import io.github.eliaslameiro.galetube.video.service.VideoService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -24,6 +29,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import java.net.URI;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -38,6 +44,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -237,5 +245,128 @@ class VideoControllerTest {
         mockMvc.perform(delete("/api/videos/" + videoId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token()))
                 .andExpect(status().isNotFound());
+    }
+
+    private static final String CREAR_VIDEO = """
+            {"title":"Mi viaje","visibility":"PUBLIC","contentType":"video/mp4","sizeBytes":1000}""";
+
+    private final UploadResponse urlFirmada = new UploadResponse(
+            URI.create("http://almacenamiento/firmada"), Map.of("content-type", "video/mp4"), Instant.now());
+
+    private MockHttpServletRequestBuilder postAutenticado(String url, String body) {
+        return post(url)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body);
+    }
+
+    @Test
+    void crearDevuelve201ConLocationElVideoYLaUrlDeSubida() throws Exception {
+        given(videoService.create(eq(requester()), any()))
+                .willReturn(new CreateVideoResponse(respuesta("Mi viaje"), urlFirmada));
+
+        mockMvc.perform(postAutenticado("/api/videos", CREAR_VIDEO))
+                .andExpect(status().isCreated())
+                .andExpect(header().string(HttpHeaders.LOCATION, "http://localhost/api/videos/" + videoId))
+                .andExpect(jsonPath("$.video.id").value(videoId.toString()))
+                .andExpect(jsonPath("$.upload.url").value("http://almacenamiento/firmada"))
+                .andExpect(jsonPath("$.upload.headers.content-type").value("video/mp4"));
+    }
+
+    @Test
+    void crearSinContentTypeNiTamanoDevuelve400ConLosCamposSenalados() throws Exception {
+        mockMvc.perform(postAutenticado("/api/videos", "{\"title\":\"Mi viaje\",\"visibility\":\"PUBLIC\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.contentType").exists())
+                .andExpect(jsonPath("$.errors.sizeBytes").exists());
+
+        verifyNoInteractions(videoService);
+    }
+
+    @Test
+    void crearConUnTamanoNegativoDevuelve400() throws Exception {
+        mockMvc.perform(postAutenticado("/api/videos",
+                        "{\"title\":\"Mi viaje\",\"visibility\":\"PUBLIC\",\"contentType\":\"video/mp4\",\"sizeBytes\":-5}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.sizeBytes").exists());
+
+        verifyNoInteractions(videoService);
+    }
+
+    @Test
+    void siElServicioRechazaElFicheroDevuelve400ConElMotivo() throws Exception {
+        willThrow(new InvalidUploadException("Tipo de fichero no permitido: application/x-msdownload"))
+                .given(videoService).create(any(), any());
+
+        mockMvc.perform(postAutenticado("/api/videos", CREAR_VIDEO))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Tipo de fichero no permitido: application/x-msdownload"));
+    }
+
+    @Test
+    void crearSinTokenDevuelve401YNoLlegaAlServicio() throws Exception {
+        mockMvc.perform(post("/api/videos").contentType(MediaType.APPLICATION_JSON).content(CREAR_VIDEO))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(videoService);
+    }
+
+    @Test
+    void renovarLaUrlDevuelve200ConLaNuevaUrl() throws Exception {
+        given(videoService.renewUploadUrl(eq(videoId), eq(requester()), any())).willReturn(urlFirmada);
+
+        mockMvc.perform(postAutenticado("/api/videos/" + videoId + "/upload-url",
+                        "{\"contentType\":\"video/mp4\",\"sizeBytes\":1000}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.url").value("http://almacenamiento/firmada"));
+    }
+
+    @Test
+    void renovarLaUrlDeUnVideoYaListoDevuelve409() throws Exception {
+        willThrow(new VideoNotUploadingException(videoId))
+                .given(videoService).renewUploadUrl(any(), any(), any());
+
+        mockMvc.perform(postAutenticado("/api/videos/" + videoId + "/upload-url",
+                        "{\"contentType\":\"video/mp4\",\"sizeBytes\":1000}"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void renovarLaUrlSinTokenDevuelve401() throws Exception {
+        mockMvc.perform(post("/api/videos/" + videoId + "/upload-url")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"contentType\":\"video/mp4\",\"sizeBytes\":1000}"))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(videoService);
+    }
+
+    @Test
+    void confirmarLaSubidaDevuelve200ConElVideo() throws Exception {
+        given(videoService.completeUpload(videoId, requester())).willReturn(respuesta("Mi viaje"));
+
+        mockMvc.perform(post("/api/videos/" + videoId + "/upload-complete")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("READY"));
+    }
+
+    @Test
+    void confirmarSinFicheroSubidoDevuelve409ConElMotivo() throws Exception {
+        willThrow(new VideoFileNotUploadedException(videoId))
+                .given(videoService).completeUpload(any(), any());
+
+        mockMvc.perform(post("/api/videos/" + videoId + "/upload-complete")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("Todavía no se ha subido el fichero del vídeo " + videoId));
+    }
+
+    @Test
+    void confirmarLaSubidaSinTokenDevuelve401() throws Exception {
+        mockMvc.perform(post("/api/videos/" + videoId + "/upload-complete"))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(videoService);
     }
 }

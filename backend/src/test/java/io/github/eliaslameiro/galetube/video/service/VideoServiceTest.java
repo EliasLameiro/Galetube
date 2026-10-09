@@ -31,6 +31,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.util.unit.DataSize;
 
@@ -62,7 +66,6 @@ class VideoServiceTest {
     @Mock
     private StorageService storageService;
 
-    // Un record con datos fijos: no hay nada que mockear
     private final VideoProperties videoProperties =
             new VideoProperties(Set.of("video/mp4", "video/webm"), DataSize.ofMegabytes(100));
 
@@ -81,14 +84,16 @@ class VideoServiceTest {
         videoService = new VideoService(videoRepository, userService, storageService, videoProperties);
     }
 
-    private Video videoCon(Visibility visibility) {
-        return new Video(duenoId, "Titulo original", "Descripcion original", visibility);
+    private Video videoSubiendo(Visibility visibility) {
+        Video video = new Video(duenoId, "Titulo original", "Descripcion original", visibility);
+        ReflectionTestUtils.setField(video, "id", videoId);
+        return video;
     }
 
-    /** En producción el id lo asigna Hibernate al persistir; aquí no hay Hibernate, así que lo ponemos a mano. */
-    private Video videoGuardado(Visibility visibility) {
-        Video video = videoCon(visibility);
-        ReflectionTestUtils.setField(video, "id", videoId);
+    private Video videoCon(Visibility visibility) {
+        Video video = videoSubiendo(visibility);
+        video.prepareUpload();
+        video.markAsReady("video/mp4", 1_000L);
         return video;
     }
 
@@ -438,15 +443,12 @@ class VideoServiceTest {
         assertThat(video.getDescription()).isNull();
     }
 
-    // ---------- Subida del fichero ----------
-
     private final String claveEsperada = "videos/" + videoId + "/original";
     private final PresignedUpload urlFirmada = new PresignedUpload(
             URI.create("http://almacenamiento/firmada"), Map.of("content-type", "video/mp4"), Instant.now());
 
     @Test
     void createGuardaElVideoSubiendoYDevuelveLaUrlFirmadaParaSuClave() {
-        // Simula lo que hace Hibernate en save(): asignar el id
         given(videoRepository.save(any(Video.class))).willAnswer(invocation -> {
             Video video = invocation.getArgument(0);
             ReflectionTestUtils.setField(video, "id", videoId);
@@ -487,7 +489,7 @@ class VideoServiceTest {
 
     @Test
     void renewUploadUrlFirmaOtraVezLaMismaClave() {
-        dadoUnVideo(videoGuardado(Visibility.PUBLIC));
+        dadoUnVideo(videoSubiendo(Visibility.PUBLIC));
         given(storageService.presignUpload(claveEsperada, "video/mp4", 1_000L)).willReturn(urlFirmada);
 
         UploadResponse response = videoService.renewUploadUrl(videoId, dueno, new UploadRequest("video/mp4", 1_000L));
@@ -496,8 +498,8 @@ class VideoServiceTest {
     }
 
     @Test
-    void renewUploadUrlDeUnVideoAjenoLanzaAccessDeniedYNoFirma() {
-        dadoUnVideo(videoGuardado(Visibility.PUBLIC));
+    void renewUploadUrlDeUnVideoPublicoAjenoLanzaAccessDeniedYNoFirma() {
+        dadoUnVideo(videoCon(Visibility.PUBLIC));
 
         assertThatThrownBy(() -> videoService.renewUploadUrl(videoId, extrano, new UploadRequest("video/mp4", 1_000L)))
                 .isInstanceOf(VideoAccessDeniedException.class);
@@ -507,7 +509,7 @@ class VideoServiceTest {
 
     @Test
     void renewUploadUrlNiSiquieraUnAdminPuedeSubirPorOtro() {
-        dadoUnVideo(videoGuardado(Visibility.PUBLIC));
+        dadoUnVideo(videoSubiendo(Visibility.PUBLIC));
 
         assertThatThrownBy(() -> videoService.renewUploadUrl(videoId, admin, new UploadRequest("video/mp4", 1_000L)))
                 .isInstanceOf(VideoAccessDeniedException.class);
@@ -517,7 +519,7 @@ class VideoServiceTest {
 
     @Test
     void renewUploadUrlDeUnVideoYaListoLanzaNotUploading() {
-        Video video = videoGuardado(Visibility.PUBLIC);
+        Video video = videoSubiendo(Visibility.PUBLIC);
         video.prepareUpload();
         video.markAsReady("video/mp4", 1_000L);
         dadoUnVideo(video);
@@ -530,7 +532,7 @@ class VideoServiceTest {
 
     @Test
     void completeUploadConElFicheroEnElAlmacenamientoLoMarcaListoConLosDatosQueDiceS3() {
-        Video video = videoGuardado(Visibility.PUBLIC);
+        Video video = videoSubiendo(Visibility.PUBLIC);
         video.prepareUpload();
         dadoUnVideo(video);
         given(storageService.find(claveEsperada)).willReturn(Optional.of(new StoredObject("video/webm", 999L)));
@@ -546,7 +548,7 @@ class VideoServiceTest {
 
     @Test
     void completeUploadSinFicheroEnElAlmacenamientoLanzaNotUploadedYSigueSubiendo() {
-        Video video = videoGuardado(Visibility.PUBLIC);
+        Video video = videoSubiendo(Visibility.PUBLIC);
         video.prepareUpload();
         dadoUnVideo(video);
         given(storageService.find(claveEsperada)).willReturn(Optional.empty());
@@ -559,7 +561,7 @@ class VideoServiceTest {
 
     @Test
     void completeUploadDeUnVideoSinClaveNiSiquieraPreguntaAlAlmacenamiento() {
-        dadoUnVideo(videoGuardado(Visibility.PUBLIC));
+        dadoUnVideo(videoSubiendo(Visibility.PUBLIC));
 
         assertThatThrownBy(() -> videoService.completeUpload(videoId, dueno))
                 .isInstanceOf(VideoFileNotUploadedException.class);
@@ -568,15 +570,46 @@ class VideoServiceTest {
     }
 
     @Test
-    void completeUploadDeUnVideoAjenoLanzaAccessDeniedYNoLoMarcaListo() {
-        Video video = videoGuardado(Visibility.PUBLIC);
+    void completeUploadDeUnVideoAjenoQueSeEstaSubiendoLanzaNotFoundYNoLoMarcaListo() {
+        Video video = videoSubiendo(Visibility.PUBLIC);
         video.prepareUpload();
         dadoUnVideo(video);
 
         assertThatThrownBy(() -> videoService.completeUpload(videoId, extrano))
-                .isInstanceOf(VideoAccessDeniedException.class);
+                .isInstanceOf(VideoNotFoundException.class);
 
         assertThat(video.getStatus()).isEqualTo(VideoStatus.UPLOADING);
         verifyNoInteractions(storageService);
+    }
+
+    @Test
+    void getByIdDeUnVideoPublicoAjenoQueSeEstaSubiendoLanzaNotFound() {
+        dadoUnVideo(videoSubiendo(Visibility.PUBLIC));
+
+        assertThatThrownBy(() -> videoService.getById(videoId, extrano))
+                .isInstanceOf(VideoNotFoundException.class);
+    }
+
+    @Test
+    void getByIdDeUnVideoPropioQueSeEstaSubiendoLoDevuelve() {
+        dadoUnVideo(videoSubiendo(Visibility.PUBLIC));
+        dadoElAutor();
+
+        VideoResponse response = videoService.getById(videoId, dueno);
+
+        assertThat(response.status()).isEqualTo(VideoStatus.UPLOADING);
+    }
+
+    @Test
+    void listPublicSoloPideLosVideosPublicosYaListos() {
+        Pageable pageable = PageRequest.of(0, 20);
+        Page<Video> pagina = new PageImpl<>(List.of(videoCon(Visibility.PUBLIC)), pageable, 1);
+        given(videoRepository.findByVisibilityAndStatus(Visibility.PUBLIC, VideoStatus.READY, pageable)).willReturn(pagina);
+        given(userService.getUsernamesByIds(Set.of(duenoId))).willReturn(Map.of(duenoId, "elias"));
+
+        Page<VideoResponse> response = videoService.listPublic(pageable);
+
+        assertThat(response.getContent()).singleElement()
+                .satisfies(video -> assertThat(video.status()).isEqualTo(VideoStatus.READY));
     }
 }

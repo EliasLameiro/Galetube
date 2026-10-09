@@ -14,7 +14,10 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "videos", indexes = @Index(name = "idx_videos_owner", columnList = "owner_id"))
+@Table(name = "videos", indexes = {
+        @Index(name = "idx_videos_owner", columnList = "owner_id"),
+        @Index(name = "idx_videos_listing", columnList = "visibility, status, id")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Video {

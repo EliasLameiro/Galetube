@@ -9,6 +9,7 @@ import io.github.eliaslameiro.galetube.user.service.UserService;
 import io.github.eliaslameiro.galetube.video.config.VideoProperties;
 import io.github.eliaslameiro.galetube.video.domain.Video;
 import io.github.eliaslameiro.galetube.video.domain.VideoRepository;
+import io.github.eliaslameiro.galetube.video.domain.VideoStatus;
 import io.github.eliaslameiro.galetube.video.domain.Visibility;
 import io.github.eliaslameiro.galetube.video.dto.CreateVideoRequest;
 import io.github.eliaslameiro.galetube.video.dto.CreateVideoResponse;
@@ -46,7 +47,6 @@ public class VideoService {
 
     private static final String AUTOR_DESCONOCIDO = "[usuario eliminado]";
 
-    /** Valida la subida antes de crear nada: si el fichero no es aceptable, no queda ningún vídeo huérfano. */
     @Transactional
     public CreateVideoResponse create(Requester requester, CreateVideoRequest request) {
         validarSubida(request.contentType(), request.sizeBytes());
@@ -86,7 +86,7 @@ public class VideoService {
 
         video.markAsReady(stored.contentType(), stored.sizeBytes());
 
-        videoRepository.flush();   // @UpdateTimestamp solo se aplica al hacer flush, igual que en update
+        videoRepository.flush();
         return toResponse(video);
     }
 
@@ -97,7 +97,7 @@ public class VideoService {
 
     @Transactional(readOnly = true)
     public Page<VideoResponse> listPublic (Pageable pageable) {
-        Page<Video> page = videoRepository.findByVisibility(Visibility.PUBLIC, pageable);
+        Page<Video> page = videoRepository.findByVisibilityAndStatus(Visibility.PUBLIC, VideoStatus.READY, pageable);
 
         Set<UUID> ownerIds = page.getContent().stream()
                 .map(Video::getOwnerId)
@@ -152,7 +152,9 @@ public class VideoService {
         Video video = videoRepository.findById(videoId)
                 .orElseThrow(() -> new VideoNotFoundException("No existe el vídeo con id " + videoId));
 
-        if (video.getVisibility() == Visibility.PRIVATE && !esDueno(video, requester)) {
+        boolean oculto = video.getVisibility() == Visibility.PRIVATE || video.getStatus() != VideoStatus.READY;
+
+        if (oculto && !esDueno(video, requester)) {
             if (requester == null || !requester.can(Permission.VIEW_ANY_VIDEO)) {
                 throw new VideoNotFoundException("No existe el vídeo con id " + videoId);
             }
@@ -186,7 +188,6 @@ public class VideoService {
                 accion, permission, requester.id(), requester.role(), video.getId(), video.getOwnerId());
     }
 
-    /** Subir el fichero es cosa del autor: ningún permiso de moderación lo concede. */
     private Video findOwnVideoOrThrow(UUID videoId, Requester requester) {
         Video video = findVisibleOrThrow(videoId, requester);
         if (!esDueno(video, requester)) {
