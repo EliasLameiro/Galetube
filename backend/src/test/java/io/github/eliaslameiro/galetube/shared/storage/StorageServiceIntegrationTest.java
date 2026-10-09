@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -67,6 +68,30 @@ class StorageServiceIntegrationTest {
     @Test
     void findDevuelveVacioSiElObjetoNoExiste() {
         assertThat(storageService.find(key)).isEmpty();
+    }
+
+    @Test
+    void conLaUrlDeDescargaSeObtieneElContenidoSubido() throws Exception {
+        put(storageService.presignUpload(key, "video/mp4", contenido.length), "video/mp4", contenido);
+
+        HttpResponse<byte[]> respuesta = http.send(
+                HttpRequest.newBuilder(storageService.presignDownload(key)).build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+
+        assertThat(respuesta.statusCode()).isEqualTo(200);
+        assertThat(respuesta.body()).isEqualTo(contenido);
+    }
+
+    @Test
+    void laUrlDeDescargaNoSirveParaOtraClave() throws Exception {
+        put(storageService.presignUpload(key, "video/mp4", contenido.length), "video/mp4", contenido);
+        URI firmada = storageService.presignDownload(key);
+        URI otraClave = URI.create(firmada.toString().replace(key, "tests/otra-clave"));
+
+        HttpResponse<Void> respuesta = http.send(
+                HttpRequest.newBuilder(otraClave).build(), HttpResponse.BodyHandlers.discarding());
+
+        assertThat(respuesta.statusCode()).isEqualTo(403);
     }
 }
 

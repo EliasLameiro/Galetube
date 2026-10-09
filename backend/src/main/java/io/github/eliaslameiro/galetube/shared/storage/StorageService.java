@@ -7,6 +7,7 @@ import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 
 import java.net.URI;
@@ -40,6 +41,14 @@ public class StorageService {
 
         return new PresignedUpload(URI.create(presigned.url().toString()), headers, presigned.expiration());
     }
+
+    public URI presignDownload(String key) {
+        PresignedGetObjectRequest presigned = s3Presigner.presignGetObject(r -> r
+                .signatureDuration(storageProperties.downloadUrlExpiration())
+                .getObjectRequest(get -> get.bucket(storageProperties.bucket()).key(key)));
+
+        return URI.create(presigned.url().toString());
+    }      
 
     public Optional<StoredObject> find(String key) {
         try {

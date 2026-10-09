@@ -31,6 +31,9 @@ public record StorageProperties(
     @NotNull
     Duration uploadUrlExpiration,
 
+    @NotNull
+    Duration downloadUrlExpiration,
+
     boolean pathStyleAccess
 ) {
 
