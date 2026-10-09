@@ -1,6 +1,7 @@
 package io.github.eliaslameiro.galetube.video.web;
 
 import io.github.eliaslameiro.galetube.video.dto.CreateVideoRequest;
+import io.github.eliaslameiro.galetube.video.dto.CreateVideoResponse;
 import io.github.eliaslameiro.galetube.shared.dto.PageResponse;
 import io.github.eliaslameiro.galetube.shared.security.Requester;
 import io.github.eliaslameiro.galetube.video.dto.UpdateVideoRequest;
@@ -30,17 +31,17 @@ public class VideoController {
     private final VideoService videoService;
 
     @PostMapping
-    public ResponseEntity<VideoResponse> create(@Valid @RequestBody CreateVideoRequest request,
-                                                @AuthenticationPrincipal Requester requester) {
+    public ResponseEntity<CreateVideoResponse> create(@Valid @RequestBody CreateVideoRequest request,
+                                                      @AuthenticationPrincipal Requester requester) {
 
-        VideoResponse video = videoService.create(requester, request);
+        CreateVideoResponse created = videoService.create(requester, request);
 
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
-                .buildAndExpand(video.id())
+                .buildAndExpand(created.video().id())
                 .toUri();
 
-        return ResponseEntity.created(location).body(video);
+        return ResponseEntity.created(location).body(created);
     }
 
     @GetMapping

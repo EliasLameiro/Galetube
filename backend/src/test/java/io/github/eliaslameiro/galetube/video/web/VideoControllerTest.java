@@ -4,6 +4,7 @@ import io.github.eliaslameiro.galetube.shared.security.JwtService;
 import io.github.eliaslameiro.galetube.shared.security.Requester;
 import io.github.eliaslameiro.galetube.shared.security.Role;
 import io.github.eliaslameiro.galetube.shared.security.SecurityConfig;
+import io.github.eliaslameiro.galetube.video.domain.VideoStatus;
 import io.github.eliaslameiro.galetube.video.domain.Visibility;
 import io.github.eliaslameiro.galetube.video.dto.AuthorResponse;
 import io.github.eliaslameiro.galetube.video.dto.UpdateVideoRequest;
@@ -70,7 +71,7 @@ class VideoControllerTest {
 
     private VideoResponse respuesta(String titulo) {
         return new VideoResponse(videoId, new AuthorResponse(userId, "elias"), titulo,
-                "Descripcion", Visibility.PUBLIC, Instant.now(), Instant.now());
+                "Descripcion", Visibility.PUBLIC, VideoStatus.READY, Instant.now(), Instant.now());
     }
 
     private MockHttpServletRequestBuilder patchAutenticado(String body) {

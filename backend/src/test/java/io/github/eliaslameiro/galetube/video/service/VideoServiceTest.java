@@ -2,14 +2,26 @@ package io.github.eliaslameiro.galetube.video.service;
 
 import io.github.eliaslameiro.galetube.shared.security.Requester;
 import io.github.eliaslameiro.galetube.shared.security.Role;
+import io.github.eliaslameiro.galetube.shared.storage.PresignedUpload;
+import io.github.eliaslameiro.galetube.shared.storage.StorageService;
+import io.github.eliaslameiro.galetube.shared.storage.StoredObject;
 import io.github.eliaslameiro.galetube.user.service.UserService;
+import io.github.eliaslameiro.galetube.video.config.VideoProperties;
 import io.github.eliaslameiro.galetube.video.domain.Video;
 import io.github.eliaslameiro.galetube.video.domain.VideoRepository;
+import io.github.eliaslameiro.galetube.video.domain.VideoStatus;
 import io.github.eliaslameiro.galetube.video.domain.Visibility;
+import io.github.eliaslameiro.galetube.video.dto.CreateVideoRequest;
+import io.github.eliaslameiro.galetube.video.dto.CreateVideoResponse;
 import io.github.eliaslameiro.galetube.video.dto.UpdateVideoRequest;
+import io.github.eliaslameiro.galetube.video.dto.UploadRequest;
+import io.github.eliaslameiro.galetube.video.dto.UploadResponse;
 import io.github.eliaslameiro.galetube.video.dto.VideoResponse;
+import io.github.eliaslameiro.galetube.video.exception.InvalidUploadException;
 import io.github.eliaslameiro.galetube.video.exception.VideoAccessDeniedException;
+import io.github.eliaslameiro.galetube.video.exception.VideoFileNotUploadedException;
 import io.github.eliaslameiro.galetube.video.exception.VideoNotFoundException;
+import io.github.eliaslameiro.galetube.video.exception.VideoNotUploadingException;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -19,9 +31,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.util.unit.DataSize;
 
+import java.net.URI;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,6 +59,13 @@ class VideoServiceTest {
     @Mock
     private UserService userService;
 
+    @Mock
+    private StorageService storageService;
+
+    // Un record con datos fijos: no hay nada que mockear
+    private final VideoProperties videoProperties =
+            new VideoProperties(Set.of("video/mp4", "video/webm"), DataSize.ofMegabytes(100));
+
     private VideoService videoService;
 
     private final UUID duenoId = UUID.randomUUID();
@@ -53,11 +78,18 @@ class VideoServiceTest {
 
     @BeforeEach
     void setUp() {
-        videoService = new VideoService(videoRepository, userService);
+        videoService = new VideoService(videoRepository, userService, storageService, videoProperties);
     }
 
     private Video videoCon(Visibility visibility) {
         return new Video(duenoId, "Titulo original", "Descripcion original", visibility);
+    }
+
+    /** En producción el id lo asigna Hibernate al persistir; aquí no hay Hibernate, así que lo ponemos a mano. */
+    private Video videoGuardado(Visibility visibility) {
+        Video video = videoCon(visibility);
+        ReflectionTestUtils.setField(video, "id", videoId);
+        return video;
     }
 
     private void dadoUnVideo(Video video) {
@@ -404,5 +436,147 @@ class VideoServiceTest {
         Video video = new Video(duenoId, "Titulo", "   ", Visibility.PUBLIC);
 
         assertThat(video.getDescription()).isNull();
+    }
+
+    // ---------- Subida del fichero ----------
+
+    private final String claveEsperada = "videos/" + videoId + "/original";
+    private final PresignedUpload urlFirmada = new PresignedUpload(
+            URI.create("http://almacenamiento/firmada"), Map.of("content-type", "video/mp4"), Instant.now());
+
+    @Test
+    void createGuardaElVideoSubiendoYDevuelveLaUrlFirmadaParaSuClave() {
+        // Simula lo que hace Hibernate en save(): asignar el id
+        given(videoRepository.save(any(Video.class))).willAnswer(invocation -> {
+            Video video = invocation.getArgument(0);
+            ReflectionTestUtils.setField(video, "id", videoId);
+            return video;
+        });
+        given(storageService.presignUpload(claveEsperada, "video/mp4", 1_000L)).willReturn(urlFirmada);
+        dadoElAutor();
+
+        CreateVideoResponse response = videoService.create(dueno,
+                new CreateVideoRequest("Mi viaje", null, Visibility.PUBLIC, "video/mp4", 1_000L));
+
+        assertThat(response.video().status()).isEqualTo(VideoStatus.UPLOADING);
+        assertThat(response.upload().url()).isEqualTo(urlFirmada.url());
+    }
+
+    @Test
+    void createConUnTipoNoPermitidoNoGuardaNadaNiFirma() {
+        CreateVideoRequest request = new CreateVideoRequest("Virus", null, Visibility.PUBLIC, "application/x-msdownload", 1_000L);
+
+        assertThatThrownBy(() -> videoService.create(dueno, request))
+                .isInstanceOf(InvalidUploadException.class);
+
+        verify(videoRepository, never()).save(any());
+        verifyNoInteractions(storageService);
+    }
+
+    @Test
+    void createDeUnFicheroMayorQueElMaximoNoGuardaNadaNiFirma() {
+        long demasiado = DataSize.ofMegabytes(100).toBytes() + 1;
+        CreateVideoRequest request = new CreateVideoRequest("Enorme", null, Visibility.PUBLIC, "video/mp4", demasiado);
+
+        assertThatThrownBy(() -> videoService.create(dueno, request))
+                .isInstanceOf(InvalidUploadException.class);
+
+        verify(videoRepository, never()).save(any());
+        verifyNoInteractions(storageService);
+    }
+
+    @Test
+    void renewUploadUrlFirmaOtraVezLaMismaClave() {
+        dadoUnVideo(videoGuardado(Visibility.PUBLIC));
+        given(storageService.presignUpload(claveEsperada, "video/mp4", 1_000L)).willReturn(urlFirmada);
+
+        UploadResponse response = videoService.renewUploadUrl(videoId, dueno, new UploadRequest("video/mp4", 1_000L));
+
+        assertThat(response.url()).isEqualTo(urlFirmada.url());
+    }
+
+    @Test
+    void renewUploadUrlDeUnVideoAjenoLanzaAccessDeniedYNoFirma() {
+        dadoUnVideo(videoGuardado(Visibility.PUBLIC));
+
+        assertThatThrownBy(() -> videoService.renewUploadUrl(videoId, extrano, new UploadRequest("video/mp4", 1_000L)))
+                .isInstanceOf(VideoAccessDeniedException.class);
+
+        verifyNoInteractions(storageService);
+    }
+
+    @Test
+    void renewUploadUrlNiSiquieraUnAdminPuedeSubirPorOtro() {
+        dadoUnVideo(videoGuardado(Visibility.PUBLIC));
+
+        assertThatThrownBy(() -> videoService.renewUploadUrl(videoId, admin, new UploadRequest("video/mp4", 1_000L)))
+                .isInstanceOf(VideoAccessDeniedException.class);
+
+        verifyNoInteractions(storageService);
+    }
+
+    @Test
+    void renewUploadUrlDeUnVideoYaListoLanzaNotUploading() {
+        Video video = videoGuardado(Visibility.PUBLIC);
+        video.prepareUpload();
+        video.markAsReady("video/mp4", 1_000L);
+        dadoUnVideo(video);
+
+        assertThatThrownBy(() -> videoService.renewUploadUrl(videoId, dueno, new UploadRequest("video/mp4", 1_000L)))
+                .isInstanceOf(VideoNotUploadingException.class);
+
+        verifyNoInteractions(storageService);
+    }
+
+    @Test
+    void completeUploadConElFicheroEnElAlmacenamientoLoMarcaListoConLosDatosQueDiceS3() {
+        Video video = videoGuardado(Visibility.PUBLIC);
+        video.prepareUpload();
+        dadoUnVideo(video);
+        given(storageService.find(claveEsperada)).willReturn(Optional.of(new StoredObject("video/webm", 999L)));
+        dadoElAutor();
+
+        VideoResponse response = videoService.completeUpload(videoId, dueno);
+
+        assertThat(response.status()).isEqualTo(VideoStatus.READY);
+        assertThat(video.getContentType()).isEqualTo("video/webm");
+        assertThat(video.getSizeBytes()).isEqualTo(999L);
+        verify(videoRepository).flush();
+    }
+
+    @Test
+    void completeUploadSinFicheroEnElAlmacenamientoLanzaNotUploadedYSigueSubiendo() {
+        Video video = videoGuardado(Visibility.PUBLIC);
+        video.prepareUpload();
+        dadoUnVideo(video);
+        given(storageService.find(claveEsperada)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> videoService.completeUpload(videoId, dueno))
+                .isInstanceOf(VideoFileNotUploadedException.class);
+
+        assertThat(video.getStatus()).isEqualTo(VideoStatus.UPLOADING);
+    }
+
+    @Test
+    void completeUploadDeUnVideoSinClaveNiSiquieraPreguntaAlAlmacenamiento() {
+        dadoUnVideo(videoGuardado(Visibility.PUBLIC));
+
+        assertThatThrownBy(() -> videoService.completeUpload(videoId, dueno))
+                .isInstanceOf(VideoFileNotUploadedException.class);
+
+        verifyNoInteractions(storageService);
+    }
+
+    @Test
+    void completeUploadDeUnVideoAjenoLanzaAccessDeniedYNoLoMarcaListo() {
+        Video video = videoGuardado(Visibility.PUBLIC);
+        video.prepareUpload();
+        dadoUnVideo(video);
+
+        assertThatThrownBy(() -> videoService.completeUpload(videoId, extrano))
+                .isInstanceOf(VideoAccessDeniedException.class);
+
+        assertThat(video.getStatus()).isEqualTo(VideoStatus.UPLOADING);
+        verifyNoInteractions(storageService);
     }
 }

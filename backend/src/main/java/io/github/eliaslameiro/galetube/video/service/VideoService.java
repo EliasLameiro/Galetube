@@ -2,14 +2,23 @@ package io.github.eliaslameiro.galetube.video.service;
 
 import io.github.eliaslameiro.galetube.shared.security.Permission;
 import io.github.eliaslameiro.galetube.shared.security.Requester;
+import io.github.eliaslameiro.galetube.shared.storage.PresignedUpload;
+import io.github.eliaslameiro.galetube.shared.storage.StorageService;
+import io.github.eliaslameiro.galetube.shared.storage.StoredObject;
 import io.github.eliaslameiro.galetube.user.service.UserService;
+import io.github.eliaslameiro.galetube.video.config.VideoProperties;
 import io.github.eliaslameiro.galetube.video.domain.Video;
 import io.github.eliaslameiro.galetube.video.domain.VideoRepository;
 import io.github.eliaslameiro.galetube.video.domain.Visibility;
 import io.github.eliaslameiro.galetube.video.dto.CreateVideoRequest;
+import io.github.eliaslameiro.galetube.video.dto.CreateVideoResponse;
 import io.github.eliaslameiro.galetube.video.dto.UpdateVideoRequest;
+import io.github.eliaslameiro.galetube.video.dto.UploadRequest;
+import io.github.eliaslameiro.galetube.video.dto.UploadResponse;
 import io.github.eliaslameiro.galetube.video.dto.VideoResponse;
+import io.github.eliaslameiro.galetube.video.exception.InvalidUploadException;
 import io.github.eliaslameiro.galetube.video.exception.VideoAccessDeniedException;
+import io.github.eliaslameiro.galetube.video.exception.VideoFileNotUploadedException;
 import io.github.eliaslameiro.galetube.video.exception.VideoNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -20,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -30,12 +40,17 @@ public class VideoService {
 
     private final VideoRepository videoRepository;
     private final UserService userService;
+    private final StorageService storageService;
+    private final VideoProperties videoProperties;
     private static final Logger auditoria = LoggerFactory.getLogger("AUDITORIA");
 
     private static final String AUTOR_DESCONOCIDO = "[usuario eliminado]";
 
+    /** Valida la subida antes de crear nada: si el fichero no es aceptable, no queda ningún vídeo huérfano. */
     @Transactional
-    public VideoResponse create(Requester requester, CreateVideoRequest request) {
+    public CreateVideoResponse create(Requester requester, CreateVideoRequest request) {
+        validarSubida(request.contentType(), request.sizeBytes());
+
         Video video = new Video(
                 requester.id(),
                 request.title(),
@@ -44,7 +59,35 @@ public class VideoService {
 
         Video saved = videoRepository.save(video);
 
-        return toResponse(saved);
+        PresignedUpload upload = storageService.presignUpload(
+                saved.prepareUpload(), request.contentType(), request.sizeBytes());
+
+        return new CreateVideoResponse(toResponse(saved), UploadResponse.from(upload));
+    }
+
+    @Transactional
+    public UploadResponse renewUploadUrl(UUID videoId, Requester requester, UploadRequest request) {
+        Video video = findOwnVideoOrThrow(videoId, requester);
+        validarSubida(request.contentType(), request.sizeBytes());
+
+        PresignedUpload upload = storageService.presignUpload(
+                video.prepareUpload(), request.contentType(), request.sizeBytes());
+
+        return UploadResponse.from(upload);
+    }
+
+    @Transactional
+    public VideoResponse completeUpload(UUID videoId, Requester requester) {
+        Video video = findOwnVideoOrThrow(videoId, requester);
+
+        StoredObject stored = Optional.ofNullable(video.getStorageKey())
+                .flatMap(storageService::find)
+                .orElseThrow(() -> new VideoFileNotUploadedException(videoId));
+
+        video.markAsReady(stored.contentType(), stored.sizeBytes());
+
+        videoRepository.flush();   // @UpdateTimestamp solo se aplica al hacer flush, igual que en update
+        return toResponse(video);
     }
 
     @Transactional(readOnly = true)
@@ -143,6 +186,23 @@ public class VideoService {
                 accion, permission, requester.id(), requester.role(), video.getId(), video.getOwnerId());
     }
 
+    /** Subir el fichero es cosa del autor: ningún permiso de moderación lo concede. */
+    private Video findOwnVideoOrThrow(UUID videoId, Requester requester) {
+        Video video = findVisibleOrThrow(videoId, requester);
+        if (!esDueno(video, requester)) {
+            throw new VideoAccessDeniedException("Solo el autor puede subir el fichero de su vídeo");
+        }
+        return video;
+    }
 
+    private void validarSubida(String contentType, long sizeBytes) {
+        if (!videoProperties.allowedContentTypes().contains(contentType)) {
+            throw new InvalidUploadException("Tipo de fichero no permitido: " + contentType);
+        }
+        if (sizeBytes > videoProperties.maxUploadSize().toBytes()) {
+            throw new InvalidUploadException(
+                    "El fichero supera el tamaño máximo de " + videoProperties.maxUploadSize().toMegabytes() + " MB");
+        }
+    }
 }
 

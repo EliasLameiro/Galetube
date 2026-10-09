@@ -1,6 +1,7 @@
 package io.github.eliaslameiro.galetube.video.dto;
 
 import io.github.eliaslameiro.galetube.video.domain.Video;
+import io.github.eliaslameiro.galetube.video.domain.VideoStatus;
 import io.github.eliaslameiro.galetube.video.domain.Visibility;
 
 import java.time.Instant;
@@ -13,6 +14,7 @@ public record VideoResponse (
         String title,
         String description,
         Visibility visibility,
+        VideoStatus status,
         Instant createdAt,
         Instant updatedAt
 
@@ -25,6 +27,7 @@ public record VideoResponse (
                 video.getTitle(),
                 video.getDescription(),
                 video.getVisibility(),
+                video.getStatus(),
                 video.getCreatedAt(),
                 video.getUpdatedAt()
         );
