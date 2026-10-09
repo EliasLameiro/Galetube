@@ -1,6 +1,7 @@
 package io.github.eliaslameiro.galetube.shared.storage;
 
 import java.net.URI;
+import java.time.Duration;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
@@ -26,6 +27,9 @@ public record StorageProperties(
 
     @NotBlank
     String bucket,
+
+    @NotNull
+    Duration uploadUrlExpiration,
 
     boolean pathStyleAccess
 ) {
