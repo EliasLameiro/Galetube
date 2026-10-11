@@ -1,5 +1,6 @@
 package io.github.eliaslameiro.galetube.video.service;
 
+import io.github.eliaslameiro.galetube.TestcontainersConfiguration;
 import io.github.eliaslameiro.galetube.shared.security.Requester;
 import io.github.eliaslameiro.galetube.shared.security.Role;
 import io.github.eliaslameiro.galetube.shared.storage.PresignedUpload;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.net.http.HttpClient;
@@ -22,6 +24,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
+@Import(TestcontainersConfiguration.class)
 class VideoDeletionIntegrationTest {
 
     @Autowired
