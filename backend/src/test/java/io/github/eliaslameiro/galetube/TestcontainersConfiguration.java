@@ -1,14 +1,15 @@
 package io.github.eliaslameiro.galetube;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.test.context.DynamicPropertyRegistrar;
-import org.testcontainers.mysql.MySQLContainer;
-import org.testcontainers.utility.DockerImageName;
-import org.testcontainers.containers.*;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.testcontainers.mysql.MySQLContainer;
+import org.testcontainers.rabbitmq.RabbitMQContainer;
+import org.testcontainers.utility.DockerImageName;
 
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
@@ -33,7 +34,7 @@ private static final int S3_PORT = 8333;
             .withEnv("S3_BUCKET", BUCKET)
             .withExposedPorts(S3_PORT)
             .waitingFor(Wait.forLogMessage(".*created bucket " + BUCKET + ".*", 1));
-}
+    }
 
     @Bean
     DynamicPropertyRegistrar storageProperties(@Qualifier("seaweedfs") GenericContainer<?> seaweedfs) {
@@ -44,5 +45,11 @@ private static final int S3_PORT = 8333;
             registry.add("galetube.storage.secret-key", () -> SECRET_KEY);
             registry.add("galetube.storage.bucket", () -> BUCKET);
     };
-}
+    }
+
+    @Bean 
+    @ServiceConnection 
+    RabbitMQContainer rabbitMQContainer() {
+        return new RabbitMQContainer(DockerImageName.parse("rabbitmq:4.3-management"));
+    }
 }
